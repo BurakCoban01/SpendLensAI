@@ -12,13 +12,13 @@ Receipt and invoice intake · Tesseract + project-owned Custom OCR · human revi
 
 ## Türkçe Özet
 
-SpendLens AI, fiş/fatura/dekont görsellerini yerel ortamda okuyan, çıkan metni akıllıca yapılandıran ve gider yönetiminin tamamını (inceleme, onay, bütçe, rapor) tek bir üründe birleştiren **tamamen yerel** bir harcama istihbarat platformudur.
+SpendLens AI, fiş/fatura/dekont görsellerini local ortamda okuyan, çıkan metni akıllıca yapılandıran ve gider yönetiminin tamamını (inceleme, onay, bütçe, rapor) tek bir üründe birleştiren **tamamen yerel** bir harcama takip, analiz platformudur.
 
-- **Tamamen yerel:** Tüm servisler (PostgreSQL, Redis, Redpanda/Kafka, MinIO, OCR) kendi makinenizde Docker ile çalışır. Buluta, ücretli OCR/API'ye veri gönderilmez.
-- **İki OCR motoru:** Tesseract (üretim tabanı) ve projeye özel eğitilebilir **CRNN/CTC Custom OCR** motoru.
+- **Tamamen local:** Tüm servisler (PostgreSQL, Redis, Redpanda/Kafka, MinIO, OCR) kendi makinenizde Docker ile çalışır. Buluta, ücretli OCR/API'ye veri gönderilmez.
+- **İki farklı OCR motoru:** Tesseract kütüphanesi (üretim tabanı) kullanılan hazır OCR ve **Projeye Özel Kendi Geliştirdiğimiz Eğitilebilir CRNN/CTC Custom OCR** motoru.
 - **İnsan onaylı akış:** OCR → inceleme/düzeltme → gider oluşturma → onay/geri ödeme → bütçe → rapor.
-- **Çok kiracılı ve güvenli:** RBAC, denetim kayıtları (audit log), API anahtarları.
-- **İki dil:** Türkçe (birincil) ve İngilizce arayüz; açık ve koyu tema.
+- **Multi tenant ve güvenli:** RBAC, denetim kayıtları (audit log), API anahtarları.
+- **İki dil ve  İki tema:** Türkçe (birincil) ve İngilizce arayüz; açık ve koyu tema.
 
 Hızlı başlangıç için aşağıdaki [Quick Start](#quick-start) bölümüne, tüm dokümantasyona [Documentation](#documentation) bölümünden ulaşabilirsiniz.
 
@@ -38,13 +38,6 @@ Upload document → Preprocess → OCR (Tesseract or Custom OCR) → Extract fie
 
 Both OCR engines are first-class: **Tesseract** is the production baseline, and **Custom OCR** is a project-owned, trainable CRNN/CTC pipeline that never delegates to other OCR engines. Uncertain results always land in a review queue — the UI shows what happened, whether the result is reliable and what to do next.
 
-## Screenshots
-
-| Dashboard | OCR comparison | Review |
-| --- | --- | --- |
-| ![Dashboard](docs/screenshots/03-dashboard.png) | ![OCR comparison](docs/screenshots/05-ocr-comparison.png) | ![Review](docs/screenshots/06-review.png) |
-
-Regenerate screenshots from the real app with `pnpm portfolio:screenshots` (writes to `docs/screenshots/`).
 
 ## Key Features
 
@@ -133,6 +126,11 @@ Regenerate screenshots from the real app with `pnpm portfolio:screenshots` (writ
 | Observability | Prometheus metrics, Grafana, structured JSON logs |
 | Orchestration | Docker Compose, Kubernetes manifests |
 | Tests | Vitest, Playwright, Python unittest |
+
+## Screenshots
+<img width="1708" height="943" alt="Ekran görüntüsü 2026-08-18 230757" src="https://github.com/user-attachments/assets/72f9bd11-52c1-4494-9018-90176a09abef" /> 
+
+<img width="1702" height="925" alt="Ekran görüntüsü 2026-08-19 004518" src="https://github.com/user-attachments/assets/47e6069a-36a7-4f9d-bd9e-01f4da516972" /> 
 
 ## Quick Start
 
