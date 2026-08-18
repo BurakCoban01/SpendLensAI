@@ -1,0 +1,65 @@
+node_modules/
+.turbo/
+.next/
+.next-*/
+apps/web/.next-*/
+dist/
+*.tsbuildinfo
+coverage/
+test-results/
+playwright-report/
+.playwright-mcp/
+.env
+.env.*
+!.env.example
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+artifacts/
+data/generated/
+data/checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+data/minio/
+data/postgres/
+data/redis/
+*.sqlite
+*.db
+*.log
+
+# Windows reserved device name accidentally materialized as a file via "> nul" redirects in non-cmd shells
+nul
+
+# Local recovery/forensic artifacts (not for the public repo; may contain machine paths / session data)
+docs/tlmtlr/dkkt/SnGtYklmesi/
+docs/tlmtlr/dkkt/slmeislemiyapilansessionkayitlari.md
+docs/KullanilanDokumanlar/dkkt/slmeislemiyapilansessionkayitlari.md
+
+# Large dataset binary/image files - excluded from repo to avoid bloat
+docs/KullanilanDokumanlar/Dataset/EMNIST (Extended MNIST)/raw/
+docs/KullanilanDokumanlar/Dataset/CORD (Consolidated Receipt Dataset)/
+docs/KullanilanDokumanlar/Dataset/SROIE (Scanned Receipts OCR and Information Extraction) Dataset/
+docs/KullanilanDokumanlar/Dataset/OCRTurk/data/
+docs/KullanilanDokumanlar/Dataset/Turkish-Hun-Eng Handwritten Char Datasets/version*.csv
+docs/KullanilanDokumanlar/tr/ChatGPT*.png
+.DS_Store
+
+# Internal development/process artifacts - never published to the public repository
+AGENTS.md
+goal*.md
+TASKS.md
+docs/agent/
+docs/task-evidence/
+docs/tlmtlr/
+docs/validation/
+docs/portfolio/
+docs/KullanilanDokumanlar/
+data/demo-fixtures/
+data/datasets/

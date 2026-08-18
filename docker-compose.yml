@@ -1,0 +1,232 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-spendlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spendlens_local_password}
+      POSTGRES_DB: ${POSTGRES_DB:-spendlens}
+    ports:
+      - "${POSTGRES_PORT:-15433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-16380}:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://localhost:${KAFKA_PORT:-19092}
+      - --default-log-level=warn
+    ports:
+      - "${KAFKA_PORT:-19092}:9092"
+      - "${REDPANDA_ADMIN_PORT:-19644}:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q Healthy"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+
+  minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-spendlens}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-spendlens_local_minio_password}
+    ports:
+      - "${MINIO_API_PORT:-19002}:9000"
+      - "${MINIO_CONSOLE_PORT:-19003}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      API_PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spendlens}:${POSTGRES_PASSWORD:-spendlens_local_password}@postgres:5432/${POSTGRES_DB:-spendlens}?schema=public
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      MINIO_ENDPOINT: http://minio:9000
+      OCR_SERVICE_URL: http://ocr-service:8000
+      CUSTOM_OCR_DEFAULT_CHECKPOINT: ${CUSTOM_OCR_DEFAULT_CHECKPOINT:-artifacts/models/custom-crnn-project-real-crops-finetune-v5/model.pt}
+      CUSTOM_OCR_NUMERIC_CHAR_CHECKPOINT: ${CUSTOM_OCR_NUMERIC_CHAR_CHECKPOINT:-artifacts/models/local-full-20260620-ocr/numeric-char-cnn-v1/char-cnn.pt}
+      CUSTOM_OCR_CHARACTER_CHECKPOINT: ${CUSTOM_OCR_CHARACTER_CHECKPOINT:-artifacts/models/custom-char-cnn-project-real-v1/char-cnn.pt}
+      CUSTOM_OCR_CRNN_CHALLENGER_CHECKPOINT: ${CUSTOM_OCR_CRNN_CHALLENGER_CHECKPOINT:-artifacts/models/custom-crnn-mixed-regression-replay-longline-specialist-20260710/model.pt}
+      CUSTOM_OCR_CRNN_CHALLENGER_MODE: ${CUSTOM_OCR_CRNN_CHALLENGER_MODE:-validated}
+      CUSTOM_OCR_ROUTER_CHECKPOINT: ${CUSTOM_OCR_ROUTER_CHECKPOINT:-artifacts/models/custom-ocr-pairwise-router-sroie-v1-20260711/router.json}
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data/generated:/app/data/generated
+    ports:
+      - "${API_PORT:-18621}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ocr-service:
+        condition: service_healthy
+    profiles: ["app", "worker", "drainer"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spendlens}:${POSTGRES_PASSWORD:-spendlens_local_password}@postgres:5432/${POSTGRES_DB:-spendlens}?schema=public
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      MINIO_ENDPOINT: http://minio:9000
+      WORKER_API_BASE_URL: http://api:4000
+      WORKER_ID: docker-dedicated-worker
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-1000}
+      WORKER_MAX_JOBS_PER_TICK: ${WORKER_MAX_JOBS_PER_TICK:-5}
+      OCR_SERVICE_URL: http://ocr-service:8000
+      CUSTOM_OCR_DEFAULT_CHECKPOINT: ${CUSTOM_OCR_DEFAULT_CHECKPOINT:-artifacts/models/custom-crnn-project-real-crops-finetune-v5/model.pt}
+      CUSTOM_OCR_NUMERIC_CHAR_CHECKPOINT: ${CUSTOM_OCR_NUMERIC_CHAR_CHECKPOINT:-artifacts/models/local-full-20260620-ocr/numeric-char-cnn-v1/char-cnn.pt}
+      CUSTOM_OCR_CHARACTER_CHECKPOINT: ${CUSTOM_OCR_CHARACTER_CHECKPOINT:-artifacts/models/custom-char-cnn-project-real-v1/char-cnn.pt}
+      CUSTOM_OCR_CRNN_CHALLENGER_CHECKPOINT: ${CUSTOM_OCR_CRNN_CHALLENGER_CHECKPOINT:-artifacts/models/custom-crnn-mixed-regression-replay-longline-specialist-20260710/model.pt}
+      CUSTOM_OCR_CRNN_CHALLENGER_MODE: ${CUSTOM_OCR_CRNN_CHALLENGER_MODE:-validated}
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data/generated:/app/data/generated
+    command: ["node", "apps/api/dist/worker.js"]
+    depends_on:
+      - api
+    profiles: ["app", "worker"]
+
+  event-consumer:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spendlens}:${POSTGRES_PASSWORD:-spendlens_local_password}@postgres:5432/${POSTGRES_DB:-spendlens}?schema=public
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      EVENT_CONSUMER_CLIENT_ID: spendlens-event-consumer
+      EVENT_CONSUMER_GROUP_ID: spendlens-event-consumers
+      EVENT_CONSUMER_NAME: docker-event-consumer
+    command: ["node", "apps/api/dist/event-consumer.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    profiles: ["app", "worker"]
+
+  event-drainer:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      EVENT_DRAINER_API_BASE_URL: http://api:4000
+      EVENT_DRAINER_ID: docker-event-drainer
+      EVENT_DRAINER_INTERVAL_MS: ${EVENT_DRAINER_INTERVAL_MS:-5000}
+      EVENT_DRAINER_LIMIT: ${EVENT_DRAINER_LIMIT:-25}
+      EVENT_DRAINER_INCLUDE_FAILED: ${EVENT_DRAINER_INCLUDE_FAILED:-false}
+      EVENT_DRAINER_ACCESS_TOKEN: ${EVENT_DRAINER_ACCESS_TOKEN:-}
+      EVENT_DRAINER_TENANT_SLUG: ${EVENT_DRAINER_TENANT_SLUG:-}
+      EVENT_DRAINER_EMAIL: ${EVENT_DRAINER_EMAIL:-}
+      EVENT_DRAINER_PASSWORD: ${EVENT_DRAINER_PASSWORD:-}
+    command: ["node", "apps/api/dist/event-drainer.js"]
+    depends_on:
+      - api
+    profiles: ["drainer"]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file:
+      - .env
+    environment:
+      WEB_PORT: 3000
+    ports:
+      - "${WEB_PORT:-18620}:3000"
+    depends_on:
+      - api
+    profiles: ["app"]
+
+  ocr-service:
+    build:
+      context: .
+      dockerfile: services/ocr/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spendlens}:${POSTGRES_PASSWORD:-spendlens_local_password}@postgres:5432/${POSTGRES_DB:-spendlens}?schema=public
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      MINIO_ENDPOINT: http://minio:9000
+      CUSTOM_OCR_DEFAULT_CHECKPOINT: ${CUSTOM_OCR_DEFAULT_CHECKPOINT:-artifacts/models/custom-crnn-project-real-crops-finetune-v5/model.pt}
+      CUSTOM_OCR_NUMERIC_CHAR_CHECKPOINT: ${CUSTOM_OCR_NUMERIC_CHAR_CHECKPOINT:-artifacts/models/local-full-20260620-ocr/numeric-char-cnn-v1/char-cnn.pt}
+      CUSTOM_OCR_CHARACTER_CHECKPOINT: ${CUSTOM_OCR_CHARACTER_CHECKPOINT:-artifacts/models/custom-char-cnn-project-real-v1/char-cnn.pt}
+      CUSTOM_OCR_CRNN_CHALLENGER_CHECKPOINT: ${CUSTOM_OCR_CRNN_CHALLENGER_CHECKPOINT:-artifacts/models/custom-crnn-mixed-regression-replay-longline-specialist-20260710/model.pt}
+      CUSTOM_OCR_CRNN_CHALLENGER_MODE: ${CUSTOM_OCR_CRNN_CHALLENGER_MODE:-validated}
+      CUSTOM_OCR_ROUTER_CHECKPOINT: ${CUSTOM_OCR_ROUTER_CHECKPOINT:-artifacts/models/custom-ocr-pairwise-router-sroie-v1-20260711/router.json}
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data/generated:/app/data/generated
+    ports:
+      - "${OCR_SERVICE_PORT:-18622}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json,urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)); raise SystemExit(0 if data.get('status') == 'ok' else 1)"
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    profiles: ["app", "worker", "drainer"]
+
+volumes:
+  postgres-data:
+  redis-data:
+  redpanda-data:
+  minio-data:
