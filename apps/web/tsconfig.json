@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "jsx": "preserve",
+    "noEmit": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "isolatedModules": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-e2e/types/**/*.ts",
+    ".next-e2e-docker/types/**/*.ts",
+    ".next-final/types/**/*.ts",
+    ".next-e2e-ocr/types/**/*.ts",
+    ".next-e2e-portfolio/types/**/*.ts",
+    ".next-e2e-full-browser/types/**/*.ts",
+    ".next-e2e-custom-ocr/types/**/*.ts",
+    ".next-e2e-custom-live/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

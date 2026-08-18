@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: spendlens
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - secrets.example.yaml
+  - dependencies.yaml
+  - api.yaml
+  - worker.yaml
+  - event-consumer.yaml
+  - event-drainer.yaml
+  - web.yaml
+  - ocr-service.yaml
+  - migration-job.yaml
+  - cleanup-cronjob.yaml
+  - hpa.yaml
+  - network-policy.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: spendlens-ai
+      app.kubernetes.io/part-of: spendlens-ai

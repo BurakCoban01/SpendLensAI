@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spendlens-web
+  namespace: spendlens
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spendlens-web
+  template:
+    metadata:
+      labels:
+        app: spendlens-web
+    spec:
+      serviceAccountName: spendlens-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: spendlens/web:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: spendlens-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spendlens-web
+  namespace: spendlens
+spec:
+  selector:
+    app: spendlens-web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000

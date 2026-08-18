@@ -1,0 +1,1041 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DocumentKind {
+  RECEIPT
+  INVOICE
+  OTHER
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PREPROCESSING
+  OCR_RUNNING
+  EXTRACTED
+  NEEDS_REVIEW
+  APPROVED
+  FAILED
+  DELETED
+}
+
+enum ExpenseStatus {
+  DRAFT
+  EXTRACTED
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  REIMBURSED
+  ARCHIVED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum UploadSessionStatus {
+  INITIATED
+  UPLOADING
+  PAUSED
+  COMPLETING
+  COMPLETED
+  CANCELED
+  EXPIRED
+  FAILED
+}
+
+enum UploadChunkStatus {
+  UPLOADED
+  FAILED
+}
+
+enum OCREngineCode {
+  TESSERACT
+  CUSTOM_CRNN
+  ENSEMBLE
+  CATEGORY_ML
+}
+
+enum ModelStatus {
+  CANDIDATE
+  ACTIVE
+  ARCHIVED
+  FAILED
+}
+
+enum DatasetSplit {
+  TRAIN
+  VALIDATION
+  TEST
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@index([slug])
+}
+
+model User {
+  id               String   @id @default(cuid())
+  tenantId         String
+  email            String
+  displayName      String
+  passwordHash     String
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  disabledAt       DateTime?
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, userId, roleId])
+  @@index([tenantId, userId])
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  tenantId     String
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, roleId, permissionId])
+}
+
+model Session {
+  id                String   @id @default(cuid())
+  tenantId          String
+  userId            String
+  refreshTokenHash  String
+  userAgent         String?
+  ipHash            String?
+  createdAt         DateTime @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  rotatedFromId     String?
+
+  @@index([tenantId, userId])
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  kind        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  archivedAt  DateTime?
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Household {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, workspaceId])
+}
+
+model BusinessProfile {
+  id             String   @id @default(cuid())
+  tenantId       String
+  workspaceId    String
+  legalName      String
+  taxIdentifier  String?
+  defaultCurrency String  @default("TRY")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, workspaceId])
+}
+
+model Merchant {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  normalizedName String
+  taxIdentifier  String?
+  categoryId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, normalizedName])
+  @@index([tenantId])
+}
+
+model ExpenseCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  parentId    String?
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+}
+
+model PaymentMethod {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  type        String
+  maskedLast4 String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Expense {
+  id              String        @id @default(cuid())
+  tenantId        String
+  workspaceId     String
+  merchantId      String?
+  categoryId      String?
+  paymentMethodId String?
+  documentId      String?
+  status          ExpenseStatus @default(DRAFT)
+  title           String
+  description     String?
+  currency        String        @default("TRY")
+  amountMinor     BigInt
+  taxMinor        BigInt        @default(0)
+  occurredAt      DateTime
+  reimbursable    Boolean       @default(false)
+  businessExpense Boolean       @default(false)
+  projectCode     String?
+  costCenter      String?
+  duplicateGroup  String?
+  createdById     String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?
+
+  @@index([tenantId, workspaceId, occurredAt])
+  @@index([tenantId, status])
+}
+
+model ExpenseAttachment {
+  id             String    @id @default(cuid())
+  tenantId       String
+  expenseId      String
+  documentFileId String
+  label          String?
+  note           String?
+  attachedById   String
+  attachedAt     DateTime  @default(now())
+  detachedAt     DateTime?
+
+  @@index([tenantId, expenseId, detachedAt])
+  @@index([tenantId, documentFileId])
+}
+
+model ExpenseLineItem {
+  id             String   @id @default(cuid())
+  tenantId       String
+  expenseId      String
+  name           String
+  quantity       Decimal  @db.Decimal(18, 4)
+  unitPriceMinor BigInt
+  taxRateBps     Int?
+  totalMinor     BigInt
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, expenseId])
+}
+
+model ExpenseComment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  expenseId   String
+  authorId    String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, expenseId, createdAt])
+}
+
+model TaxBreakdown {
+  id          String   @id @default(cuid())
+  tenantId    String
+  expenseId   String
+  label       String
+  rateBps     Int
+  taxableMinor BigInt
+  taxMinor    BigInt
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, expenseId])
+}
+
+model Budget {
+  id           String   @id @default(cuid())
+  tenantId     String
+  workspaceId  String
+  categoryId   String?
+  name         String
+  currency     String   @default("TRY")
+  amountMinor  BigInt
+  alertPercent Int      @default(80)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId, workspaceId])
+}
+
+model BudgetPeriod {
+  id          String   @id @default(cuid())
+  tenantId    String
+  budgetId    String
+  startsAt    DateTime
+  endsAt      DateTime
+  spentMinor  BigInt   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, budgetId, startsAt, endsAt])
+}
+
+model ReceiptDocument {
+  id          String         @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  status      DocumentStatus @default(UPLOADED)
+  merchantId  String?
+  capturedAt  DateTime?
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([tenantId, workspaceId, status])
+}
+
+model InvoiceDocument {
+  id              String         @id @default(cuid())
+  tenantId        String
+  workspaceId     String
+  status          DocumentStatus @default(UPLOADED)
+  supplierName    String?
+  invoiceNumber   String?
+  issueDate       DateTime?
+  createdById     String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([tenantId, workspaceId, status])
+}
+
+model DocumentFile {
+  id             String       @id @default(cuid())
+  tenantId       String
+  workspaceId    String
+  kind           DocumentKind
+  receiptId      String?
+  invoiceId      String?
+  originalName   String
+  safeName       String
+  mimeType       String
+  sizeBytes      BigInt
+  sha256         String
+  bucket         String
+  objectKey      String
+  createdById    String
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+
+  @@unique([tenantId, sha256])
+  @@index([tenantId, workspaceId, kind])
+  @@index([tenantId, workspaceId, createdAt, id])
+}
+
+model UploadSession {
+  id             String              @id @default(cuid())
+  tenantId       String
+  workspaceId    String
+  kind           DocumentKind
+  originalName   String
+  safeName       String
+  clientMimeType String
+  totalSizeBytes BigInt
+  chunkSizeBytes Int
+  totalChunks    Int
+  status         UploadSessionStatus @default(INITIATED)
+  finalSha256    String?
+  documentFileId String?
+  failureReason  String?
+  createdById    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  expiresAt      DateTime
+  completedAt    DateTime?
+
+  @@index([tenantId, workspaceId, status])
+  @@index([tenantId, createdById, status])
+}
+
+model UploadChunk {
+  id              String            @id @default(cuid())
+  tenantId        String
+  uploadSessionId String
+  chunkIndex      Int
+  sizeBytes       Int
+  clientCrc32     String
+  serverCrc32     String
+  bucket          String
+  objectKey       String
+  status          UploadChunkStatus @default(UPLOADED)
+  retryCount      Int               @default(0)
+  uploadedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([tenantId, uploadSessionId, chunkIndex])
+  @@index([tenantId, uploadSessionId, status])
+}
+
+model DocumentPage {
+  id             String   @id @default(cuid())
+  tenantId       String
+  documentFileId String
+  pageNumber     Int
+  width          Int?
+  height         Int?
+  processedBucket String?
+  processedKey   String?
+  preprocessingProfile String?
+  qualityScore   Decimal? @db.Decimal(5, 4)
+  createdAt      DateTime @default(now())
+
+  @@unique([tenantId, documentFileId, pageNumber])
+}
+
+model OCRJob {
+  id             String    @id @default(cuid())
+  tenantId       String
+  documentFileId String
+  status         JobStatus  @default(QUEUED)
+  requestedEngines String[]
+  progress       Int       @default(0)
+  failureReason  String?
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([tenantId, status])
+}
+
+model OCREngineRun {
+  id             String        @id @default(cuid())
+  tenantId       String
+  ocrJobId       String
+  engine         OCREngineCode
+  modelVersionId String?
+  status         JobStatus      @default(QUEUED)
+  language       String?
+  psm            Int?
+  oem            Int?
+  rawTextKey     String?
+  normalizedJson Json?
+  confidence     Decimal?       @db.Decimal(5, 4)
+  latencyMs      Int?
+  failureReason  String?
+  createdAt      DateTime       @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, ocrJobId, engine])
+}
+
+model OCRTextBlock {
+  id             String   @id @default(cuid())
+  tenantId       String
+  engineRunId    String
+  pageNumber     Int
+  text           String
+  confidence     Decimal? @db.Decimal(5, 4)
+  bbox           Json
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, engineRunId])
+}
+
+model OCRLine {
+  id             String   @id @default(cuid())
+  tenantId       String
+  engineRunId    String
+  blockId        String?
+  lineNumber     Int
+  text           String
+  confidence     Decimal? @db.Decimal(5, 4)
+  bbox           Json
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, engineRunId])
+}
+
+model OCRToken {
+  id             String   @id @default(cuid())
+  tenantId       String
+  engineRunId    String
+  lineId         String?
+  text           String
+  normalizedText String?
+  confidence     Decimal? @db.Decimal(5, 4)
+  bbox           Json
+  tokenIndex     Int
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, engineRunId])
+}
+
+model OCRConfidenceScore {
+  id          String   @id @default(cuid())
+  tenantId    String
+  engineRunId String
+  scope       String
+  score       Decimal  @db.Decimal(5, 4)
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, engineRunId])
+}
+
+model OCRCorrection {
+  id          String   @id @default(cuid())
+  tenantId    String
+  documentFileId String
+  fieldName   String?
+  beforeValue String?
+  afterValue  String
+  correctedById String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, documentFileId])
+}
+
+model OCRReviewTask {
+  id             String    @id @default(cuid())
+  tenantId       String
+  documentFileId String
+  status         JobStatus @default(QUEUED)
+  assignedToId   String?
+  reasonCodes    String[]
+  dueAt          DateTime?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, status, assignedToId])
+}
+
+model ExtractionJob {
+  id             String    @id @default(cuid())
+  tenantId       String
+  documentFileId String
+  ocrJobId       String
+  status         JobStatus @default(QUEUED)
+  confidence     Decimal?  @db.Decimal(5, 4)
+  failureReason  String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, status])
+}
+
+model ExtractedField {
+  id             String   @id @default(cuid())
+  tenantId       String
+  extractionJobId String
+  fieldName      String
+  value          String
+  valueType      String
+  confidence     Decimal? @db.Decimal(5, 4)
+  sourceEngine   OCREngineCode?
+  validationStatus String
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, extractionJobId, fieldName])
+}
+
+model ExtractionCandidate {
+  id             String   @id @default(cuid())
+  tenantId       String
+  extractionJobId String
+  fieldName      String
+  candidateValue String
+  confidence     Decimal? @db.Decimal(5, 4)
+  source          String
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, extractionJobId])
+}
+
+model ValidationIssue {
+  id             String   @id @default(cuid())
+  tenantId       String
+  extractionJobId String?
+  expenseId      String?
+  code           String
+  severity       String
+  message        String
+  createdAt      DateTime @default(now())
+  resolvedAt     DateTime?
+
+  @@index([tenantId, code, severity])
+}
+
+model ModelVersion {
+  id            String      @id @default(cuid())
+  tenantId      String
+  name          String
+  engine        OCREngineCode
+  status        ModelStatus @default(CANDIDATE)
+  artifactBucket String?
+  artifactKey   String?
+  metrics       Json?
+  promotedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([tenantId, engine, status])
+}
+
+model ModelTrainingRun {
+  id             String    @id @default(cuid())
+  tenantId       String
+  modelVersionId String?
+  datasetId      String?
+  status         JobStatus @default(QUEUED)
+  profile        String
+  seed           Int
+  metrics        Json?
+  logsKey        String?
+  failureReason  String?
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([tenantId, status])
+}
+
+model ModelEvaluationRun {
+  id             String    @id @default(cuid())
+  tenantId       String
+  modelVersionId String?
+  datasetId      String?
+  status         JobStatus @default(QUEUED)
+  metrics        Json?
+  reportKey      String?
+  failureReason  String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([tenantId, status])
+}
+
+model Dataset {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  purpose     String
+  itemCount   Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+}
+
+model DatasetItem {
+  id          String       @id @default(cuid())
+  tenantId    String
+  datasetId   String
+  documentFileId String?
+  split       DatasetSplit
+  imageBucket String?
+  imageKey    String?
+  groundTruth Json
+  createdAt   DateTime     @default(now())
+
+  @@index([tenantId, datasetId, split])
+}
+
+model Annotation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  datasetItemId String?
+  documentFileId String?
+  label       String
+  payload     Json
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, label])
+}
+
+model LabelingTask {
+  id          String    @id @default(cuid())
+  tenantId    String
+  datasetItemId String?
+  documentFileId String?
+  status      JobStatus @default(QUEUED)
+  assignedToId String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([tenantId, status])
+}
+
+model ActiveLearningSuggestion {
+  id          String   @id @default(cuid())
+  tenantId    String
+  documentFileId String
+  reasonCode  String
+  score       Decimal  @db.Decimal(8, 6)
+  payload     Json?
+  createdAt   DateTime @default(now())
+  acceptedAt  DateTime?
+
+  @@index([tenantId, reasonCode, score])
+}
+
+model CategoryRule {
+  id          String   @id @default(cuid())
+  tenantId    String
+  categoryId  String
+  name        String
+  ruleType    String
+  pattern     String
+  priority    Int      @default(100)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, enabled, priority])
+}
+
+model MLCategoryPrediction {
+  id          String   @id @default(cuid())
+  tenantId    String
+  expenseId   String?
+  documentFileId String?
+  modelVersionId String?
+  categoryId  String
+  confidence  Decimal  @db.Decimal(5, 4)
+  explanation Json?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, categoryId])
+}
+
+model RecurringExpense {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  merchantId  String?
+  amountMinor BigInt
+  currency    String   @default("TRY")
+  cadence     String
+  nextDueAt   DateTime
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, workspaceId, active])
+}
+
+model Subscription {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  merchantId  String?
+  name        String
+  amountMinor BigInt
+  currency    String   @default("TRY")
+  cadence     String
+  detectedFromExpenseId String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, workspaceId, active])
+}
+
+model ReimbursementClaim {
+  id          String        @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  claimantId  String
+  status      ExpenseStatus @default(DRAFT)
+  totalMinor  BigInt        @default(0)
+  currency    String        @default("TRY")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  submittedAt DateTime?
+  paidAt      DateTime?
+
+  @@index([tenantId, workspaceId, status])
+}
+
+model ReimbursementClaimExpense {
+  id        String   @id @default(cuid())
+  tenantId  String
+  claimId   String
+  expenseId String
+  amountMinor BigInt
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, claimId, expenseId])
+  @@index([tenantId, expenseId])
+}
+
+model ExpensePolicy {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  name        String
+  ruleType    String
+  config      Json
+  severity    String   @default("warning")
+  active      Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, workspaceId, active])
+  @@index([tenantId, ruleType])
+}
+
+model ApprovalWorkflow {
+  id          String   @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  targetType  String
+  targetId    String
+  state       String
+  approverId  String?
+  policySnapshot Json?
+  slaDueAt    DateTime?
+  slaBreachedAt DateTime?
+  slaStatus   String   @default("ON_TRACK")
+  slaHours    Int      @default(48)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, targetType, targetId])
+  @@index([tenantId, workspaceId, slaStatus])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  tenantId      String
+  actorUserId   String?
+  action        String
+  resourceType  String
+  resourceId    String?
+  metadata      Json?
+  ipHash        String?
+  userAgent     String?
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, resourceType, resourceId])
+  @@index([tenantId, action, createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String
+  type        String
+  title       String
+  body        String
+  payload     Json?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, userId, readAt])
+}
+
+model WebhookEndpoint {
+  id               String   @id @default(cuid())
+  tenantId         String
+  url              String
+  eventTypes       String[]
+  secretHash       String
+  secretCiphertext String?
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, enabled])
+}
+
+model APIKey {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  keyPrefix   String
+  keyHash     String
+  scopes      String[]
+  createdById String
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  @@unique([tenantId, keyPrefix])
+  @@index([tenantId, revokedAt])
+}
+
+model ImportBatch {
+  id          String    @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  source      String
+  status      JobStatus @default(QUEUED)
+  stats       Json?
+  createdById String
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([tenantId, workspaceId, status])
+}
+
+model ExportJob {
+  id          String    @id @default(cuid())
+  tenantId    String
+  workspaceId String
+  type        String
+  status      JobStatus @default(QUEUED)
+  bucket      String?
+  objectKey   String?
+  createdById String
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  failureReason String?
+
+  @@index([tenantId, workspaceId, status])
+}
+
+model SystemHealthSnapshot {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  component   String
+  status      String
+  latencyMs   Int?
+  details     Json?
+  capturedAt  DateTime @default(now())
+
+  @@index([component, capturedAt])
+}
+
+model WorkerJob {
+  id             String    @id @default(cuid())
+  tenantId       String
+  queue          String
+  jobType        String
+  dedupeKey      String?
+  status         JobStatus @default(QUEUED)
+  progress       Int       @default(0)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  payload        Json
+  result         Json?
+  failureReason  String?
+  lockedBy       String?
+  createdById    String?
+  correlationId  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId, queue, status])
+  @@index([tenantId, jobType, createdAt])
+}
+
+model OutboxEvent {
+  id            String   @id @default(cuid())
+  tenantId      String
+  topic         String
+  aggregateId   String
+  schemaVersion Int      @default(1)
+  payload       Json
+  correlationId String
+  createdAt     DateTime @default(now())
+  publishedAt   DateTime?
+  failureReason String?
+
+  @@index([publishedAt, createdAt])
+  @@index([tenantId, topic])
+}
+
+model InboxEvent {
+  id            String   @id @default(cuid())
+  tenantId      String
+  consumerName  String
+  eventId       String
+  topic         String
+  aggregateId   String
+  schemaVersion Int      @default(1)
+  correlationId String
+  payload       Json
+  status        String
+  failureReason String?
+  receivedAt    DateTime @default(now())
+  processedAt   DateTime?
+
+  @@unique([consumerName, eventId])
+  @@index([tenantId, consumerName, receivedAt])
+  @@index([tenantId, topic])
+}

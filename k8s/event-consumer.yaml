@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spendlens-event-consumer
+  namespace: spendlens
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spendlens-event-consumer
+  template:
+    metadata:
+      labels:
+        app: spendlens-event-consumer
+    spec:
+      serviceAccountName: spendlens-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: event-consumer
+          image: spendlens/api:local
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until nc -z redpanda 9092; do
+                echo "waiting for redpanda";
+                sleep 2;
+              done;
+              exec node apps/api/dist/event-consumer.js
+          envFrom:
+            - configMapRef:
+                name: spendlens-config
+            - secretRef:
+                name: spendlens-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

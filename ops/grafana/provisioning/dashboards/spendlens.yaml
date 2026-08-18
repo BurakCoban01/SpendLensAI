@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: SpendLens
+    orgId: 1
+    folder: SpendLens AI
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spendlens-api-ingress
+  namespace: spendlens
+spec:
+  podSelector:
+    matchLabels:
+      app: spendlens-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 4000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spendlens-web-ingress
+  namespace: spendlens
+spec:
+  podSelector:
+    matchLabels:
+      app: spendlens-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spendlens-ocr-service-ingress
+  namespace: spendlens
+spec:
+  podSelector:
+    matchLabels:
+      app: spendlens-ocr-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8000

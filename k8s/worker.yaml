@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spendlens-worker
+  namespace: spendlens
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spendlens-worker
+  template:
+    metadata:
+      labels:
+        app: spendlens-worker
+    spec:
+      serviceAccountName: spendlens-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: spendlens/api:local
+          imagePullPolicy: IfNotPresent
+          command: ["node", "apps/api/dist/worker.js"]
+          envFrom:
+            - configMapRef:
+                name: spendlens-config
+            - secretRef:
+                name: spendlens-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

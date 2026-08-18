@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: spendlens-cleanup
+  namespace: spendlens
+spec:
+  schedule: "17 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: spendlens-runtime
+          automountServiceAccountToken: false
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: spendlens/api:local
+              imagePullPolicy: IfNotPresent
+              command: ["node", "apps/api/dist/main.js"]
+              envFrom:
+                - configMapRef:
+                    name: spendlens-config
+                - secretRef:
+                    name: spendlens-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi

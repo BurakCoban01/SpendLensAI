@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spendlens-ocr-service
+  namespace: spendlens
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spendlens-ocr-service
+  template:
+    metadata:
+      labels:
+        app: spendlens-ocr-service
+    spec:
+      serviceAccountName: spendlens-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ocr-service
+          image: spendlens/ocr-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: spendlens-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 20
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spendlens-ocr-service
+  namespace: spendlens
+spec:
+  selector:
+    app: spendlens-ocr-service
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

@@ -1,0 +1,72 @@
+groups:
+  - name: spendlens-core
+    rules:
+      - alert: SpendLensApiDown
+        expr: up{job="spendlens-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: SpendLens API metrics target is down
+          description: Prometheus cannot scrape the local SpendLens API metrics endpoint.
+
+      - alert: SpendLensHighHttp5xx
+        expr: sum(rate(spendlens_http_requests_total{status_code=~"5.."}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: SpendLens API is returning HTTP 5xx responses
+          description: The local API has returned server errors during the last five minutes.
+
+      - alert: SpendLensFailedOutboxEvents
+        expr: sum(spendlens_event_outbox_events{state="failed"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: events
+        annotations:
+          summary: SpendLens durable outbox has failed events
+          description: Failed outbox rows may need DLQ review or controlled replay.
+
+      - alert: SpendLensWorkerFailures
+        expr: sum(spendlens_worker_jobs{status="FAILED"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: SpendLens worker job failures detected
+          description: Durable worker jobs are in FAILED state and should be inspected in the admin jobs console.
+
+      - alert: SpendLensKafkaLagHigh
+        expr: max(spendlens_kafka_consumer_lag) > 100
+        for: 15m
+        labels:
+          severity: warning
+          service: events
+        annotations:
+          summary: SpendLens Kafka consumer lag is high
+          description: A configured Kafka consumer group is lagging by more than 100 messages.
+
+      - alert: SpendLensCacheDisconnected
+        expr: min(spendlens_cache_connected) == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: SpendLens cache backend is disconnected
+          description: Redis-backed hot state or rate limiting may be degraded.
+
+      - alert: SpendLensStorageDisconnected
+        expr: min(spendlens_storage_connected) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: storage
+        annotations:
+          summary: SpendLens object storage backend is disconnected
+          description: MinIO-backed document and report artifact access may be degraded.
